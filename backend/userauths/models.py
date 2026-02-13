@@ -6,7 +6,7 @@ class User(AbstractUser):
     username = models.CharField(unique=True,max_length=100)
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=100,unique=True)
-    otp = models.CharField(unique=True, max_length=100)
+    otp = models.CharField(max_length=100,null=True,blank=True)
 
     USERNAME_FIELD = 'email' # Users authenticate with email, not username
     REQUIRED_FIELDS = ['username'] # Username is required when creating users via CLI
