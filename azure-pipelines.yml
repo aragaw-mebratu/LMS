@@ -1,0 +1,58 @@
+# Complete Azure DevOps Pipeline for Docker Build & Push + Compose Artifact
+
+trigger:
+- master
+
+resources:
+- repo: self
+
+variables:
+  tag: '$(Build.BuildId)'  # image tag
+
+stages:
+- stage: Build
+  displayName: Build and Push Docker Images
+  jobs:
+  - job: Build
+    displayName: Build Docker Images
+    pool:
+      name: SelfHosted
+    steps:
+
+    # 1️⃣ Login to Docker Hub
+    - task: Docker@2
+      displayName: Login to Docker Hub
+      inputs:
+        command: login
+        containerRegistry: DockerHub
+
+    # 2️⃣ Build & Push Backend Image
+    - task: Docker@2
+      displayName: Build & Push Backend Image
+      inputs:
+        command: buildAndPush
+        repository: aragawmebratu/lms
+        dockerfile: '$(Build.SourcesDirectory)/Dockerfile.backend'
+        tags: |
+          $(tag)
+        containerRegistry: DockerHub
+
+    # 3️⃣ Update docker-compose.yml with latest image tag (FIXED)
+    - task: CmdLine@2
+      displayName: Update docker-compose.yml with latest tags
+      inputs:
+        script: |
+          echo Updating docker-compose.yml with tag $(tag)
+
+          powershell -NoProfile -Command ^
+            "(Get-Content '$(Build.SourcesDirectory)\docker-compose.yml') `
+            -replace '__BACKEND_TAG__','$(tag)' |
+            Set-Content '$(Build.ArtifactStagingDirectory)\docker-compose.yml'"
+
+    # 4️⃣ Publish docker-compose.yml as artifact
+    - task: PublishBuildArtifacts@1
+      displayName: Publish docker-compose.yml
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)\docker-compose.yml'
+        ArtifactName: drop
+        publishLocation: Container
