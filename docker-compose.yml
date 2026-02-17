@@ -2,6 +2,6 @@ version: "3.9"
 
 services:
   backend:
-    image: aragawmebratu/backend:${IMAGE_TAG}
+    image: aragawmebratu/lms:${IMAGE_TAG}
     ports:
       - "8000:8000"
