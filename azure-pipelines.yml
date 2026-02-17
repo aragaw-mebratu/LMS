@@ -1,6 +1,4 @@
-# Docker
-# Build a Docker image
-# https://docs.microsoft.com/azure/devops/pipelines/languages/docker
+# Complete Azure DevOps Pipeline for Docker Build & Push + Compose Artifact
 
 trigger:
 - master
@@ -9,21 +7,68 @@ resources:
 - repo: self
 
 variables:
-  tag: '$(Build.BuildId)'
+  tag: '$(Build.BuildId)'  # will be used as image tag
 
 stages:
 - stage: Build
-  displayName: Build image
+  displayName: Build and Push Docker Images
   jobs:
   - job: Build
-    displayName: Build
+    displayName: Build Docker Images
     pool:
       name: SelfHosted
     steps:
+
+    # 1️⃣ Login to Docker Hub
     - task: Docker@2
-      displayName: Build an image
+      displayName: Login to Docker Hub
       inputs:
-        command: build
+        command: login
+        containerRegistry: DockerHub   # <-- your service connection name
+
+    # 2️⃣ Build & Push Backend Image
+    - task: Docker@2
+      displayName: Build & Push Backend Image
+      inputs:
+        command: buildAndPush
+        repository: aragawmebratu/lms   # <-- your Docker Hub repo
         dockerfile: '$(Build.SourcesDirectory)/Dockerfile.backend'
         tags: |
           $(tag)
+        containerRegistry: DockerHub
+
+    # 3️⃣ Build & Push Frontend Image (optional, uncomment when ready)
+    #- task: Docker@2
+    #  displayName: Build & Push Frontend Image
+    #  inputs:
+    #    command: buildAndPush
+    #    repository: aragawmebratu/frontend
+    #    dockerfile: '$(Build.SourcesDirectory)/Dockerfile.frontend'
+    #    tags: |
+    #      $(tag)
+    #    containerRegistry: DockerHub
+
+    # 4️⃣ Update docker-compose.yml with latest image tags
+    - task: PowerShell@2
+      displayName: Update docker-compose.yml with latest tags
+      inputs:
+        targetType: inline
+        script: |
+          $composeFile = "$(Build.SourcesDirectory)/docker-compose.yml"
+          $outputFile = "$(Build.ArtifactStagingDirectory)/docker-compose.yml"
+
+          Write-Host "Updating docker-compose.yml with backend tag: $(tag)"
+          (Get-Content $composeFile) `
+            -replace "__BACKEND_TAG__", "$(tag)" `
+            # Replace frontend tag when ready: -replace "__FRONTEND_TAG__", "$(tag)" `
+            | Set-Content $outputFile
+
+          Write-Host "docker-compose.yml updated and saved to artifact staging folder."
+
+    # 5️⃣ Publish updated docker-compose.yml as artifact
+    - task: PublishBuildArtifacts@1
+      displayName: Publish docker-compose.yml
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)/docker-compose.yml'
+        ArtifactName: drop
+        publishLocation: 'Container'
