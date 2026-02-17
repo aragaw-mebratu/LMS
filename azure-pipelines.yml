@@ -53,6 +53,7 @@ stages:
       displayName: Update docker-compose.yml with latest tags
       inputs:
         targetType: inline
+        pwsh: false   # <-- IMPORTANT: use Windows PowerShell
         script: |
           $composeFile = "$(Build.SourcesDirectory)/docker-compose.yml"
           $outputFile = "$(Build.ArtifactStagingDirectory)/docker-compose.yml"
