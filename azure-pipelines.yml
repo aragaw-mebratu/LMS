@@ -41,8 +41,14 @@ stages:
         targetType: inline
         script: |
           echo "Injecting IMAGE_TAG=$(IMAGE_TAG)"
-          sed "s|\${IMAGE_TAG}|$(IMAGE_TAG)|g" docker-compose.yml \
-            > $(Build.ArtifactStagingDirectory)/docker-compose.yml
+
+          COMPOSE_SRC="$(Build.SourcesDirectory)/docker-compose.yml"
+          COMPOSE_OUT="$(Build.ArtifactStagingDirectory)/docker-compose.yml"
+
+          echo "Source: $COMPOSE_SRC"
+          echo "Output: $COMPOSE_OUT"
+
+          sed "s|\${IMAGE_TAG}|$(IMAGE_TAG)|g" "$COMPOSE_SRC" > "$COMPOSE_OUT"
 
     # 📦 Publish docker-compose.yml
     - task: PublishBuildArtifacts@1
