@@ -1,58 +1,53 @@
-# Complete Azure DevOps Pipeline for Docker Build & Push + Compose Artifact
-
 trigger:
 - master
 
-resources:
-- repo: self
-
 variables:
-  tag: '$(Build.BuildId)'  # image tag
+  IMAGE_NAME: aragawmebratu/backend
+  IMAGE_TAG: $(Build.BuildId)
 
 stages:
-- stage: Build
-  displayName: Build and Push Docker Images
+- stage: BuildAndPublish
+  displayName: Build & Push Docker Image
   jobs:
-  - job: Build
-    displayName: Build Docker Images
+  - job: Docker
+    displayName: Docker Build Job
     pool:
-      name: SelfHosted
-    steps:
+      name: SelfHosted   # ✅ Linux agent (recommended)
 
-    # 1️⃣ Login to Docker Hub
+    steps:
+    - checkout: self
+
+    # 🔐 Login to Docker Hub
     - task: Docker@2
-      displayName: Login to Docker Hub
+      displayName: Docker Hub Login
       inputs:
         command: login
-        containerRegistry: DockerHub
+        containerRegistry: DockerHub   # service connection name
 
-    # 2️⃣ Build & Push Backend Image
+    # 🐳 Build & Push Docker Image
     - task: Docker@2
       displayName: Build & Push Backend Image
       inputs:
         command: buildAndPush
-        repository: aragawmebratu/lms
-        dockerfile: '$(Build.SourcesDirectory)/Dockerfile.backend'
+        repository: $(IMAGE_NAME)
+        dockerfile: Dockerfile.backend
         tags: |
-          $(tag)
-        containerRegistry: DockerHub
+          $(IMAGE_TAG)
 
-    # 3️⃣ Update docker-compose.yml with latest image tag (FIXED)
-    - task: CmdLine@2
-      displayName: Update docker-compose.yml with latest tags
+    # 📝 Update docker-compose.yml (BASH — no PowerShell!)
+    - task: Bash@3
+      displayName: Inject image tag into docker-compose.yml
       inputs:
+        targetType: inline
         script: |
-          echo Updating docker-compose.yml with tag $(tag)
+          echo "Injecting IMAGE_TAG=$(IMAGE_TAG)"
+          sed "s|\${IMAGE_TAG}|$(IMAGE_TAG)|g" docker-compose.yml \
+            > $(Build.ArtifactStagingDirectory)/docker-compose.yml
 
-          powershell -NoProfile -Command ^
-            "(Get-Content '$(Build.SourcesDirectory)\docker-compose.yml') `
-            -replace '__BACKEND_TAG__','$(tag)' |
-            Set-Content '$(Build.ArtifactStagingDirectory)\docker-compose.yml'"
-
-    # 4️⃣ Publish docker-compose.yml as artifact
+    # 📦 Publish docker-compose.yml
     - task: PublishBuildArtifacts@1
-      displayName: Publish docker-compose.yml
+      displayName: Publish docker-compose artifact
       inputs:
-        PathtoPublish: '$(Build.ArtifactStagingDirectory)\docker-compose.yml'
-        ArtifactName: drop
+        PathtoPublish: $(Build.ArtifactStagingDirectory)/docker-compose.yml
+        ArtifactName: docker-compose
         publishLocation: Container
