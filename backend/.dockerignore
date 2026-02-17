@@ -2,7 +2,7 @@
 .gitignore
 __pycache__/
 *.pyc
-
+.env
 # ignore runtime data only
 backend/db.sqlite3
 backend/media/
