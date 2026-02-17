@@ -25,30 +25,7 @@ stages:
         command: login
         containerRegistry: DockerHub
 
-    # 🔐 Generate backend.env safely
-    - task: Bash@3
-      displayName: Generate backend.env
-      inputs:
-        targetType: inline
-        script: |
-          set -e
-
-          ARTIFACT_DIR=$(wslpath "$(Build.ArtifactStagingDirectory)")
-          mkdir -p "$ARTIFACT_DIR"
-
-          ENV_FILE="$ARTIFACT_DIR/backend.env"
-
-          echo "MAILGUN_API_KEY=$(MAILGUN_API_KEY)" >  "$ENV_FILE"
-          echo "MAILERSEND_API_TOKEN=$(MAILERSEND_API_TOKEN)" >> "$ENV_FILE"
-          echo "MAILGUN_SENDER_DOMAIN=$(MAILGUN_SENDER_DOMAIN)" >> "$ENV_FILE"
-          echo "FROM_EMAIL=$(FROM_EMAIL)" >> "$ENV_FILE"
-          echo "DJANGO_DEBUG=$(DJANGO_DEBUG)" >> "$ENV_FILE"
-          echo "DJANGO_SECRET_KEY=$(DJANGO_SECRET_KEY)" >> "$ENV_FILE"
-          echo "DJANGO_ALLOWED_HOSTS=$(DJANGO_ALLOWED_HOSTS)" >> "$ENV_FILE"
-
-          echo "backend.env generated"
-
-    # 🐳 Backend image
+    # 🐳 Build & Push Docker Image
     - task: Docker@2
       displayName: Build & Push Backend Image
       inputs:
@@ -86,10 +63,10 @@ stages:
               -e "s|\${FRONTEND_IMAGE_TAG}|$(IMAGE_TAG)|g" \
               "$SRC" > "$OUT"
 
-    # 📦 Publish artifacts
+    # 📦 Publish docker-compose.yml as artifact
     - task: PublishBuildArtifacts@1
-      displayName: Publish deployment artifacts
+      displayName: Publish docker-compose artifact
       inputs:
-        PathtoPublish: $(Build.ArtifactStagingDirectory)
-        ArtifactName: deployment
+        PathtoPublish: $(Build.ArtifactStagingDirectory)/docker-compose.yml
+        ArtifactName: docker-compose
         publishLocation: Container
