@@ -7,12 +7,12 @@ variables:
 
 stages:
 - stage: BuildAndPublish
-  displayName: Build & Push Docker Image
+  displayName: Build, Push, and Publish Artifacts
   jobs:
   - job: Docker
     displayName: Docker Build Job
     pool:
-      name: SelfHosted   # ✅ Linux agent (recommended)
+      name: SelfHosted   # Windows self-hosted agent
 
     steps:
     - checkout: self
@@ -22,7 +22,7 @@ stages:
       displayName: Docker Hub Login
       inputs:
         command: login
-        containerRegistry: DockerHub   # service connection name
+        containerRegistry: DockerHub
 
     # 🐳 Build & Push Docker Image
     - task: Docker@2
@@ -33,8 +33,9 @@ stages:
         dockerfile: Dockerfile.backend
         tags: |
           $(IMAGE_TAG)
+          latest
 
-    # 📝 Update docker-compose.yml (BASH — no PowerShell!)
+    # 📝 Inject image tag into docker-compose.yml (WSL-safe)
     - task: Bash@3
       displayName: Inject image tag into docker-compose.yml
       inputs:
@@ -42,15 +43,22 @@ stages:
         script: |
           echo "Injecting IMAGE_TAG=$(IMAGE_TAG)"
 
-          COMPOSE_SRC="$(Build.SourcesDirectory)/docker-compose.yml"
-          COMPOSE_OUT="$(Build.ArtifactStagingDirectory)/docker-compose.yml"
+          # Convert Windows paths → WSL paths
+          SRC_COMPOSE=$(wslpath "$(Build.SourcesDirectory)/docker-compose.yml")
+          ARTIFACT_DIR=$(wslpath "$(Build.ArtifactStagingDirectory)")
+          OUT_COMPOSE="$ARTIFACT_DIR/docker-compose.yml"
 
-          echo "Source: $COMPOSE_SRC"
-          echo "Output: $COMPOSE_OUT"
+          echo "Source compose: $SRC_COMPOSE"
+          echo "Artifact compose: $OUT_COMPOSE"
 
-          sed "s|\${IMAGE_TAG}|$(IMAGE_TAG)|g" "$COMPOSE_SRC" > "$COMPOSE_OUT"
+          mkdir -p "$ARTIFACT_DIR"
 
-    # 📦 Publish docker-compose.yml
+          sed "s|\${IMAGE_TAG}|$(IMAGE_TAG)|g" "$SRC_COMPOSE" > "$OUT_COMPOSE"
+
+          echo "Updated docker-compose.yml:"
+          cat "$OUT_COMPOSE"
+
+    # 📦 Publish docker-compose.yml as artifact
     - task: PublishBuildArtifacts@1
       displayName: Publish docker-compose artifact
       inputs:
