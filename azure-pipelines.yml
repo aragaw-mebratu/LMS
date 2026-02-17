@@ -2,7 +2,7 @@ trigger:
 - master
 
 variables:
-  IMAGE_NAME: aragawmebratu/backend
+  IMAGE_NAME: aragawmebratu/lms
   IMAGE_TAG: $(Build.BuildId)
 
 stages:
