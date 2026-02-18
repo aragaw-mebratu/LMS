@@ -2,7 +2,8 @@ trigger:
 - master
 
 variables:
-  IMAGE_NAME: aragawmebratu/lms
+  BACKEND_IMAGE: aragawmebratu/lms-backend
+  FRONTEND_IMAGE: aragawmebratu/lms-frontend
   IMAGE_TAG: $(Build.BuildId)
 
 stages:
@@ -12,79 +13,83 @@ stages:
   - job: Docker
     displayName: Docker Build Job
     pool:
-      name: SelfHosted   # Windows self-hosted agent
+      name: SelfHosted
 
     steps:
     - checkout: self
 
-    # 🔐 Login to Docker Hub
+    # 🔐 Docker Hub Login
     - task: Docker@2
       displayName: Docker Hub Login
       inputs:
         command: login
         containerRegistry: DockerHub
 
-    # 📝 Generate .env dynamically (secure secrets from pipeline variables)
+    # 🔐 Generate backend.env safely
     - task: Bash@3
       displayName: Generate backend.env
       inputs:
         targetType: inline
         script: |
+          set -e
+
           ARTIFACT_DIR=$(wslpath "$(Build.ArtifactStagingDirectory)")
           mkdir -p "$ARTIFACT_DIR"
+
           ENV_FILE="$ARTIFACT_DIR/backend.env"
 
-          cat <<EOF > "$ENV_FILE"
-          MAILGUN_API_KEY=$(MAILGUN_API_KEY)
-          MAILERSEND_API_TOKEN=$(MAILERSEND_API_TOKEN)
-          MAILGUN_SENDER_DOMAIN=$(MAILGUN_SENDER_DOMAIN)
-          FROM_EMAIL=$(FROM_EMAIL)
-          DJANGO_DEBUG=$(DJANGO_DEBUG)
-          DJANGO_SECRET_KEY=$(DJANGO_SECRET_KEY)
-          DJANGO_ALLOWED_HOSTS=$(DJANGO_ALLOWED_HOSTS)
-          EOF
+          echo "MAILGUN_API_KEY=$(MAILGUN_API_KEY)" >  "$ENV_FILE"
+          echo "MAILERSEND_API_TOKEN=$(MAILERSEND_API_TOKEN)" >> "$ENV_FILE"
+          echo "MAILGUN_SENDER_DOMAIN=$(MAILGUN_SENDER_DOMAIN)" >> "$ENV_FILE"
+          echo "FROM_EMAIL=$(FROM_EMAIL)" >> "$ENV_FILE"
+          echo "DJANGO_DEBUG=$(DJANGO_DEBUG)" >> "$ENV_FILE"
+          echo "DJANGO_SECRET_KEY=$(DJANGO_SECRET_KEY)" >> "$ENV_FILE"
+          echo "DJANGO_ALLOWED_HOSTS=$(DJANGO_ALLOWED_HOSTS)" >> "$ENV_FILE"
 
-          echo "Generated .env file:"
-          cat "$ENV_FILE"
+          echo "backend.env generated"
 
-    # 🐳 Build & Push Docker Image
+    # 🐳 Backend image
     - task: Docker@2
       displayName: Build & Push Backend Image
       inputs:
         command: buildAndPush
-        repository: $(IMAGE_NAME)
+        repository: $(BACKEND_IMAGE)
         dockerfile: Dockerfile.backend
         tags: |
           $(IMAGE_TAG)
           latest
 
-    # 📝 Inject image tag into docker-compose.yml (WSL-safe)
+    # 🐳 Frontend image
+    - task: Docker@2
+      displayName: Build & Push Frontend Image
+      inputs:
+        command: buildAndPush
+        repository: $(FRONTEND_IMAGE)
+        dockerfile: Dockerfile.frontend
+        tags: |
+          $(IMAGE_TAG)
+          latest
+
+    # 📝 Inject tags into docker-compose.yml
     - task: Bash@3
-      displayName: Inject image tag into docker-compose.yml
+      displayName: Inject image tags
       inputs:
         targetType: inline
         script: |
-          echo "Injecting IMAGE_TAG=$(IMAGE_TAG)"
+          SRC=$(wslpath "$(Build.SourcesDirectory)/docker-compose.yml")
+          OUT_DIR=$(wslpath "$(Build.ArtifactStagingDirectory)")
+          OUT="$OUT_DIR/docker-compose.yml"
 
-          # Convert Windows paths → WSL paths
-          SRC_COMPOSE=$(wslpath "$(Build.SourcesDirectory)/docker-compose.yml")
-          ARTIFACT_DIR=$(wslpath "$(Build.ArtifactStagingDirectory)")
-          OUT_COMPOSE="$ARTIFACT_DIR/docker-compose.yml"
+          mkdir -p "$OUT_DIR"
 
-          echo "Source compose: $SRC_COMPOSE"
-          echo "Artifact compose: $OUT_COMPOSE"
+          sed -e "s|\${BACKEND_IMAGE_TAG}|$(IMAGE_TAG)|g" \
+              -e "s|\${FRONTEND_IMAGE_TAG}|$(IMAGE_TAG)|g" \
+              "$SRC" > "$OUT"
 
-          mkdir -p "$ARTIFACT_DIR"
-
-          sed "s|\${IMAGE_TAG}|$(IMAGE_TAG)|g" "$SRC_COMPOSE" > "$OUT_COMPOSE"
-
-          echo "Updated docker-compose.yml:"
-          cat "$OUT_COMPOSE"
-
-    # 📦 Publish docker-compose.yml and backend.env as artifacts
+    # 📦 Publish artifacts
     - task: PublishBuildArtifacts@1
-      displayName: Publish docker-compose and .env artifacts
+      displayName: Publish deployment artifacts
       inputs:
         PathtoPublish: $(Build.ArtifactStagingDirectory)
-        ArtifactName: docker-compose
+        ArtifactName: deployment
         publishLocation: Container
