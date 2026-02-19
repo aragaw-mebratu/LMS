@@ -2,7 +2,6 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-<<<<<<< HEAD
 # Force yarn to use npm registry (DNS-safe)
 RUN yarn config set registry https://registry.npmjs.org
 
@@ -11,23 +10,9 @@ COPY frontend/package.json frontend/yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 COPY frontend/ .
-=======
-# Copy only dependency manifests first (cache-friendly)
-COPY frontend/package.json frontend/yarn.lock ./
-
-RUN yarn install --frozen-lockfile
-
-# Copy the rest of the frontend source
-COPY frontend/ .
-
->>>>>>> 1d4595d01dee64fb71ed62798828983dec3ea501
 RUN yarn build
 
 FROM nginx:alpine
-<<<<<<< HEAD
-=======
-
->>>>>>> 1d4595d01dee64fb71ed62798828983dec3ea501
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
